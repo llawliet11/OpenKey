@@ -111,6 +111,24 @@ extern bool convertToolDontAlertWhenCompleted;
     [NSApp terminate:0];
 }
 
+-(void)offerToQuitLegacyOpenKey {
+    NSArray<NSRunningApplication *>* legacyApps = [NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.tuyenmai.openkey"];
+    if (legacyApps.count == 0) {
+        return;
+    }
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"OpenKey bản cũ đang chạy"];
+    [alert setInformativeText:@"Hai bộ gõ chạy cùng lúc sẽ làm sai chữ khi gõ. OpenKey CE có thể thoát bản cũ ngay bây giờ.\n\nĐể bản cũ không tự chạy lại khi đăng nhập, hãy tắt \"Khởi động cùng máy\" trong OpenKey cũ hoặc xoá OpenKey.app khỏi Applications."];
+    [alert addButtonWithTitle:@"Thoát OpenKey cũ"];
+    [alert addButtonWithTitle:@"Để sau"];
+    [alert.window setLevel:NSStatusWindowLevel];
+    if ([alert runModal] == NSAlertFirstButtonReturn) {
+        for (NSRunningApplication *app in legacyApps) {
+            [app terminate];
+        }
+    }
+}
+
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     appDelegate = self;
 
@@ -144,6 +162,8 @@ extern bool convertToolDontAlertWhenCompleted;
         [NSApp terminate:nil];
         return;
     }
+
+    [self offerToQuitLegacyOpenKey];
 
     // check if user granted Accessabilty permission
     if (!MJAccessibilityIsEnabled()) {

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-OUT="${OUT:-$PWD/build}"
+OUT="$PWD/build"
 APP_NAME="OpenKey CE"
 : "${NOTARY_PROFILE:?set NOTARY_PROFILE to a notarytool keychain profile}"
 IDENTITY="${DEVELOPER_ID_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)}"

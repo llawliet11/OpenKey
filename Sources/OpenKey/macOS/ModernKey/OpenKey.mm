@@ -731,15 +731,15 @@ extern "C" {
             if ( isource != NULL )
             {
                 CFArrayRef languages = (CFArrayRef) TISGetInputSourceProperty(isource, kTISPropertyInputSourceLanguages);
-                
-                if (CFArrayGetCount(languages) > 0) {
+                BOOL isOtherLanguage = NO;
+                if (languages != NULL && CFArrayGetCount(languages) > 0) {
                     CFStringRef langRef = (CFStringRef)CFArrayGetValueAtIndex(languages, 0);
                     NSString *currentLanguage = (__bridge NSString *)langRef;
-                    if(![currentLanguage isLike:@"en"]){
-                        return event;
-                    }
-                    CFRelease(langRef);
-                    CFRelease(isource);
+                    isOtherLanguage = ![currentLanguage isLike:@"en"];
+                }
+                CFRelease(isource);
+                if (isOtherLanguage) {
+                    return event;
                 }
             }
         }
