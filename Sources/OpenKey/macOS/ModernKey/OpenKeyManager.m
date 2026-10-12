@@ -159,7 +159,7 @@ void OpenKeyReEnableEventTap(void) {
 +(void)checkNewVersion:(NSWindow*)parent callbackFunc:(CheckNewVersionCallback) callback {
     //load new version config
     NSURLSession *aSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
-    [[aSession dataTaskWithURL:[NSURL URLWithString:@"https://raw.githubusercontent.com/tuyenvm/OpenKey/master/version.json"] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+    [[aSession dataTaskWithURL:[NSURL URLWithString:@"https://raw.githubusercontent.com/llawliet11/OpenKey/master/version.json"] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         if (((NSHTTPURLResponse *)response).statusCode == 200) {
             if (data) {
                 if(NSClassFromString(@"NSJSONSerialization")) {
@@ -172,7 +172,7 @@ void OpenKeyReEnableEventTap(void) {
                     if(error) {  }
                     if([object isKindOfClass:[NSDictionary class]]) {
                         NSDictionary *results = object;
-                        NSDictionary *ver = [results valueForKey:@"latestVersion"];
+                        NSDictionary *ver = [results valueForKey:@"latestMacCEVersion"];
                         NSString* versionCodeString = [ver valueForKey:@"versionCode"];
                         int versionCode = (int)[versionCodeString integerValue];
                         int currentVersionCode = (int)[((NSString*)[[NSBundle mainBundle] objectForInfoDictionaryKey: @"CFBundleVersion"]) integerValue];
@@ -226,25 +226,7 @@ void OpenKeyReEnableEventTap(void) {
 }
 
 +(void)launchUpdateHelper {
-    //check update app has exist or not
-    NSError *copyError = nil;
-    NSString* target = [NSString stringWithFormat:@"%@/OpenKeyUpdate.app", [self getApplicationSupportFolder]];
-    [[NSFileManager defaultManager] removeItemAtPath:target error:&copyError];
-    if (![[NSFileManager defaultManager] fileExistsAtPath:target]) {
-        [[NSFileManager defaultManager] createDirectoryAtPath:[self getApplicationSupportFolder] withIntermediateDirectories:YES attributes:nil error:nil];
-        
-        if (![[NSFileManager defaultManager] copyItemAtPath:[self getUpdateBundlePath] toPath:target error:&copyError]) {
-            NSLog(@"Error on copy");
-        }
-    }
-    
-    NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
-    NSURL *url = [NSURL fileURLWithPath:[workspace fullPathForApplication:target]];
-    NSError *error = nil;
-    NSArray *arguments = [NSArray arrayWithObjects: @"yeah", nil];
-    [workspace launchApplicationAtURL:url options:0 configuration:[NSDictionary dictionaryWithObject:arguments forKey:NSWorkspaceLaunchConfigurationArguments] error:&error];
-    
-    [NSApp terminate:0]; //exit main app
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/llawliet11/OpenKey/releases/latest"]];
 }
 
 +(NSString*)getApplicationSupportFolder {
@@ -253,8 +235,4 @@ void OpenKeyReEnableEventTap(void) {
     return [NSString stringWithFormat:@"%@/OpenKey", applicationSupportDirectory];
 }
 
-+(NSString*)getUpdateBundlePath {
-    NSString *currentpath = [[NSBundle mainBundle] bundlePath];
-    return [NSString stringWithFormat:@"%@/Contents/Library/LoginItems/OpenKeyUpdate.app", currentpath];
-}
 @end

@@ -1,3 +1,27 @@
+# OpenKey CE (Community Edition) for macOS
+
+A community-maintained macOS build of [OpenKey](https://github.com/tuyenvm/OpenKey) by Mai Vũ Tuyên. The original project has not shipped a macOS release since 2.0.5 (2022); this fork rebuilds it for current macOS, signed with a Developer ID and notarized by Apple, so it opens without the "unidentified developer" warning.
+
+All credit for OpenKey goes to its author, Mai Vũ Tuyên. OpenKey CE stays GPL-3.0, like the original, and its full source is this repository.
+
+[Download OpenKey CE](https://github.com/llawliet11/OpenKey/releases/latest)
+
+## Changes from OpenKey 2.0.5
+
+- Includes every fix merged upstream since 2.0.5: Spotlight composition and macOS UI (#325), vowel fixes for "á" and "huỵch" (#306), one instance per macOS user (#314).
+- Includes open upstream PRs: re-enable the event tap after macOS disables it under load, which fixes typing dying until relaunch (#332); no duplicated characters after Spotlight closes (#329); Fn/Globe key as the language switch (#324).
+- Creates a fresh backspace event per keystroke instead of reusing one, which fixes stuck typing in Apple Mail and WebKit apps (from #333).
+- Launch at login uses `SMAppService`; the old helper app is gone.
+- Requires macOS 13 Ventura or later; universal binary for Apple silicon and Intel.
+- Bundle ID `com.nghia-pham.openkey-ce`, so it installs next to the original OpenKey. On first launch it imports settings and macros from OpenKey 2.0.5. Quit the original OpenKey before using CE: two input apps at once conflict.
+- Update checks read this fork's `version.json` and open the Releases page; the closed-source in-app updater is removed.
+
+## Build from source
+
+Requires Xcode 15 or later. `Sources/OpenKey/macOS/release.sh` builds a universal app, signs it with the Developer ID identity in your keychain, notarizes and staples the app and the DMG. Set `NOTARY_PROFILE` to a `notarytool store-credentials` profile first. To build without signing, open `Sources/OpenKey/macOS/OpenKey.xcodeproj` and build the `OpenKey` scheme.
+
+---
+
 
 # [OpenKey](http://open-key.org)
 ### [Download bản mới nhất](https://github.com/tuyenvm/OpenKey/releases)

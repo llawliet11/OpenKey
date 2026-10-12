@@ -37,7 +37,7 @@
 }
 
 - (IBAction)onLatestReleaseVersion:(id)sender {
-    [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString:@"https://github.com/tuyenvm/OpenKey/releases"]];
+    [[NSWorkspace sharedWorkspace] openURL: [NSURL URLWithString:@"https://github.com/llawliet11/OpenKey/releases"]];
 }
 
 - (IBAction)onCheckUpdateOnStartup:(NSButton *)sender {
