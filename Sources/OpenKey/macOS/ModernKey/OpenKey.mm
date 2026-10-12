@@ -61,8 +61,6 @@ extern "C" {
     
     CGEventSourceRef myEventSource = NULL;
     vKeyHookState* pData;
-    CGEventRef eventBackSpaceDown;
-    CGEventRef eventBackSpaceUp;
     UniChar _newChar, _newCharHi;
     CGEventRef _newEventDown, _newEventUp;
     CGKeyCode _keycode;
@@ -120,8 +118,6 @@ extern "C" {
         myEventSource = CGEventSourceCreate(kCGEventSourceStatePrivate);
         pData = (vKeyHookState*)vKeyInit();
 
-        eventBackSpaceDown = CGEventCreateKeyboardEvent (myEventSource, 51, true);
-        eventBackSpaceUp = CGEventCreateKeyboardEvent (myEventSource, 51, false);
         
         //init and load macro data
         NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
@@ -388,15 +384,22 @@ extern "C" {
         CFRelease(eventVkeyUp);
     }
 
+    void PostBackspaceEvent() {
+        CGEventRef bsDown = CGEventCreateKeyboardEvent(myEventSource, 51, true);
+        CGEventRef bsUp = CGEventCreateKeyboardEvent(myEventSource, 51, false);
+        CGEventTapPostEvent(_proxy, bsDown);
+        CGEventTapPostEvent(_proxy, bsUp);
+        CFRelease(bsDown);
+        CFRelease(bsUp);
+    }
+
     void SendBackspace() {
-        CGEventTapPostEvent(_proxy, eventBackSpaceDown);
-        CGEventTapPostEvent(_proxy, eventBackSpaceUp);
-        
-        if (IS_DOUBLE_CODE(vCodeTable)) { //VNI or Unicode Compound
+        PostBackspaceEvent();
+
+        if (IS_DOUBLE_CODE(vCodeTable) && !_syncKey.empty()) { //VNI or Unicode Compound
             if (_syncKey.back() > 1) {
                 if (!(vCodeTable == 3 && containUnicodeCompoundApp(FRONT_APP))) {
-                    CGEventTapPostEvent(_proxy, eventBackSpaceDown);
-                    CGEventTapPostEvent(_proxy, eventBackSpaceUp);
+                    PostBackspaceEvent();
                 }
             }
             _syncKey.pop_back();
@@ -413,8 +416,8 @@ extern "C" {
         
         CGEventTapPostEvent(_proxy, eventVkeyDown);
         CGEventTapPostEvent(_proxy, eventVkeyUp);
-        
-        if (IS_DOUBLE_CODE(vCodeTable)) { //VNI or Unicode Compound
+
+        if (IS_DOUBLE_CODE(vCodeTable) && !_syncKey.empty()) { //VNI or Unicode Compound
             if (_syncKey.back() > 1) {
                 if (!(vCodeTable == 3 && containUnicodeCompoundApp(FRONT_APP))) {
                     CGEventTapPostEvent(_proxy, eventVkeyDown);
@@ -757,8 +760,7 @@ extern "C" {
                         if (_syncKey.size() > 0) {
                             if (_syncKey.back() > 1 && (vCodeTable == 2 || !containUnicodeCompoundApp(FRONT_APP))) {
                                 //send one more backspace
-                                CGEventTapPostEvent(_proxy, eventBackSpaceDown);
-                                CGEventTapPostEvent(_proxy, eventBackSpaceUp);
+                                PostBackspaceEvent();
                             }
                             _syncKey.pop_back();
                         }
