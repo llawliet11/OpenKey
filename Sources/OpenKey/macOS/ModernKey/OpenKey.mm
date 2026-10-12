@@ -61,13 +61,14 @@ extern "C" {
     
     CGEventSourceRef myEventSource = NULL;
     vKeyHookState* pData;
-    CGEventRef eventBackSpaceDown;
-    CGEventRef eventBackSpaceUp;
     UniChar _newChar, _newCharHi;
     CGEventRef _newEventDown, _newEventUp;
     CGKeyCode _keycode;
     CGEventFlags _flag, _lastFlag = 0, _privateFlag;
     CGEventTapProxy _proxy;
+
+    //defined in OpenKeyManager.m
+    extern void OpenKeyReEnableEventTap(void);
     
     Uint16 _newCharString[MAX_UNICODE_STRING];
     Uint16 _newCharSize;
@@ -117,8 +118,6 @@ extern "C" {
         myEventSource = CGEventSourceCreate(kCGEventSourceStatePrivate);
         pData = (vKeyHookState*)vKeyInit();
 
-        eventBackSpaceDown = CGEventCreateKeyboardEvent (myEventSource, 51, true);
-        eventBackSpaceUp = CGEventCreateKeyboardEvent (myEventSource, 51, false);
         
         //init and load macro data
         NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
@@ -176,12 +175,31 @@ extern "C" {
     }
 
     BOOL isSpotlightVisible() {
+        // Only treat Spotlight as active when its window is ACTUALLY visible and on top,
+        // not merely present on screen. A closed/fading Spotlight window can linger in the
+        // window list with alpha 0; using it there makes OpenKey wrongly switch to the
+        // selection-replacement path in other apps, which duplicates characters. We require:
+        //  - alpha > 0 (window is really being drawn, not mid fade-out / stale)
+        //  - window layer > 0 (Spotlight's panel floats above normal app windows)
         NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
                                                                         kCGNullWindowID));
         for (NSDictionary *window in windows) {
-            if ([[window objectForKey:(__bridge NSString *)kCGWindowOwnerName] isEqualToString:@"Spotlight"]) {
-                return true;
-            }
+            if (![[window objectForKey:(__bridge NSString *)kCGWindowOwnerName] isEqualToString:@"Spotlight"])
+                continue;
+
+            // Skip windows that are not actually being drawn (alpha == 0 => stale/fading).
+            NSNumber* alpha = [window objectForKey:(__bridge NSString *)kCGWindowAlpha];
+            if (alpha != nil && [alpha doubleValue] <= 0.0)
+                continue;
+
+            // Spotlight's search field floats above normal app windows (layer > 0).
+            // Leftover / background Spotlight layers sit at the normal window level (0)
+            // or below; only the actual floating search panel should count.
+            NSNumber* layer = [window objectForKey:(__bridge NSString *)kCGWindowLayer];
+            if (layer != nil && [layer intValue] <= 0)
+                continue;
+
+            return true;
         }
         return false;
     }
@@ -366,15 +384,22 @@ extern "C" {
         CFRelease(eventVkeyUp);
     }
 
+    void PostBackspaceEvent() {
+        CGEventRef bsDown = CGEventCreateKeyboardEvent(myEventSource, 51, true);
+        CGEventRef bsUp = CGEventCreateKeyboardEvent(myEventSource, 51, false);
+        CGEventTapPostEvent(_proxy, bsDown);
+        CGEventTapPostEvent(_proxy, bsUp);
+        CFRelease(bsDown);
+        CFRelease(bsUp);
+    }
+
     void SendBackspace() {
-        CGEventTapPostEvent(_proxy, eventBackSpaceDown);
-        CGEventTapPostEvent(_proxy, eventBackSpaceUp);
-        
-        if (IS_DOUBLE_CODE(vCodeTable)) { //VNI or Unicode Compound
+        PostBackspaceEvent();
+
+        if (IS_DOUBLE_CODE(vCodeTable) && !_syncKey.empty()) { //VNI or Unicode Compound
             if (_syncKey.back() > 1) {
                 if (!(vCodeTable == 3 && containUnicodeCompoundApp(FRONT_APP))) {
-                    CGEventTapPostEvent(_proxy, eventBackSpaceDown);
-                    CGEventTapPostEvent(_proxy, eventBackSpaceUp);
+                    PostBackspaceEvent();
                 }
             }
             _syncKey.pop_back();
@@ -391,8 +416,8 @@ extern "C" {
         
         CGEventTapPostEvent(_proxy, eventVkeyDown);
         CGEventTapPostEvent(_proxy, eventVkeyUp);
-        
-        if (IS_DOUBLE_CODE(vCodeTable)) { //VNI or Unicode Compound
+
+        if (IS_DOUBLE_CODE(vCodeTable) && !_syncKey.empty()) { //VNI or Unicode Compound
             if (_syncKey.back() > 1) {
                 if (!(vCodeTable == 3 && containUnicodeCompoundApp(FRONT_APP))) {
                     CGEventTapPostEvent(_proxy, eventVkeyDown);
@@ -523,6 +548,8 @@ extern "C" {
             return false;
         if (HAS_SHIFT(hotKeyData) ^ GET_BOOL(_lastFlag & kCGEventFlagMaskShift))
             return false;
+        if (HAS_FN(hotKeyData) ^ GET_BOOL(_lastFlag & kCGEventFlagMaskSecondaryFn))
+            return false;
         if (checkKeyCode) {
             if (GET_SWITCH_KEY(hotKeyData) != _keycode)
                 return false;
@@ -599,6 +626,14 @@ extern "C" {
      * MAIN Callback.
      */
     CGEventRef OpenKeyCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon) {
+        //macOS turns the tap off if this callback misses its deadline (heavy system load)
+        //or after certain user input, and tells us through these two pseudo event types.
+        //Without re-enabling here, OpenKey silently stops converting until it is relaunched.
+        if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput) {
+            OpenKeyReEnableEventTap();
+            return event;
+        }
+
         //dont handle my event
         if (CGEventGetIntegerValueField(event, kCGEventSourceStateID) == CGEventSourceGetSourceStateID(myEventSource)) {
             return event;
@@ -696,15 +731,15 @@ extern "C" {
             if ( isource != NULL )
             {
                 CFArrayRef languages = (CFArrayRef) TISGetInputSourceProperty(isource, kTISPropertyInputSourceLanguages);
-                
-                if (CFArrayGetCount(languages) > 0) {
+                BOOL isOtherLanguage = NO;
+                if (languages != NULL && CFArrayGetCount(languages) > 0) {
                     CFStringRef langRef = (CFStringRef)CFArrayGetValueAtIndex(languages, 0);
                     NSString *currentLanguage = (__bridge NSString *)langRef;
-                    if(![currentLanguage isLike:@"en"]){
-                        return event;
-                    }
-                    CFRelease(langRef);
-                    CFRelease(isource);
+                    isOtherLanguage = ![currentLanguage isLike:@"en"];
+                }
+                CFRelease(isource);
+                if (isOtherLanguage) {
+                    return event;
                 }
             }
         }
@@ -725,8 +760,7 @@ extern "C" {
                         if (_syncKey.size() > 0) {
                             if (_syncKey.back() > 1 && (vCodeTable == 2 || !containUnicodeCompoundApp(FRONT_APP))) {
                                 //send one more backspace
-                                CGEventTapPostEvent(_proxy, eventBackSpaceDown);
-                                CGEventTapPostEvent(_proxy, eventBackSpaceUp);
+                                PostBackspaceEvent();
                             }
                             _syncKey.pop_back();
                         }

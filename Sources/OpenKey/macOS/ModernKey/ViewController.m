@@ -44,6 +44,7 @@ extern int vPerformLayoutCompat;
     __weak IBOutlet NSButton *CustomSwitchOption;
     __weak IBOutlet NSButton *CustomSwitchControl;
     __weak IBOutlet NSButton *CustomSwitchShift;
+    __weak IBOutlet NSButton *CustomSwitchFn;
     __weak IBOutlet MyTextField *CustomSwitchKey;
     __weak IBOutlet NSButton *CustomBeepSound;
     NSArray* tabviews, *tabbuttons;
@@ -204,7 +205,8 @@ extern int vPerformLayoutCompat;
 
 - (IBAction)onRunOnStartup:(NSButton *)sender {
     NSInteger val = [self setCustomValue:sender keyToSet:@"RunOnStartup"];
-    [appDelegate setRunOnStartup:val];
+    [appDelegate setRunOnStartup:val interactive:YES];
+    sender.state = [appDelegate isRunOnStartupActive] ? NSControlStateValueOn : NSControlStateValueOff;
 }
 
 - (IBAction)onGrayIcon:(id)sender {
@@ -263,6 +265,13 @@ extern int vPerformLayoutCompat;
     NSInteger val = [self setCustomValue:sender keyToSet:nil];
     vSwitchKeyStatus &= (~0x800);
     vSwitchKeyStatus |= val << 11;
+    [[NSUserDefaults standardUserDefaults] setInteger:vSwitchKeyStatus forKey:@"SwitchKeyStatus"];
+}
+
+- (IBAction)onFnSwitchKey:(NSButton *)sender {
+    NSInteger val = [self setCustomValue:sender keyToSet:nil];
+    vSwitchKeyStatus &= (~0x1000);
+    vSwitchKeyStatus |= val << 12;
     [[NSUserDefaults standardUserDefaults] setInteger:vSwitchKeyStatus forKey:@"SwitchKeyStatus"];
 }
 
@@ -409,8 +418,7 @@ extern int vPerformLayoutCompat;
     NSInteger spelling = [[NSUserDefaults standardUserDefaults] integerForKey:@"Spelling"];
     self.CheckSpellingButton.state = spelling ? NSControlStateValueOn : NSControlStateValueOff;
     
-    NSInteger runOnStartup = [[NSUserDefaults standardUserDefaults] integerForKey:@"RunOnStartup"];
-    self.RunOnStartupButton.state = runOnStartup ? NSControlStateValueOn : NSControlStateValueOff;
+    self.RunOnStartupButton.state = [appDelegate isRunOnStartupActive] ? NSControlStateValueOn : NSControlStateValueOff;
     
     NSInteger useGrayIcon = [[NSUserDefaults standardUserDefaults] integerForKey:@"GrayIcon"];
     self.UseGrayIcon.state = useGrayIcon ? NSControlStateValueOn : NSControlStateValueOff;
@@ -483,6 +491,7 @@ extern int vPerformLayoutCompat;
     CustomSwitchOption.state = (vSwitchKeyStatus & 0x200) ? NSControlStateValueOn : NSControlStateValueOff;
     CustomSwitchCommand.state = (vSwitchKeyStatus & 0x400) ? NSControlStateValueOn : NSControlStateValueOff;
     CustomSwitchShift.state = (vSwitchKeyStatus & 0x800) ? NSControlStateValueOn : NSControlStateValueOff;
+    CustomSwitchFn.state = (vSwitchKeyStatus & 0x1000) ? NSControlStateValueOn : NSControlStateValueOff;
     CustomBeepSound.state = (vSwitchKeyStatus & 0x8000) ? NSControlStateValueOn : NSControlStateValueOff;
     [CustomSwitchKey setTextByChar:((vSwitchKeyStatus>>24) & 0xFF)];
     
@@ -504,7 +513,8 @@ extern int vPerformLayoutCompat;
             self.ShowUIButton.state = NSControlStateValueOff;
             
             [[NSUserDefaults standardUserDefaults] setInteger:1 forKey:@"RunOnStartup"];
-            self.RunOnStartupButton.state = NSControlStateValueOn;
+            [appDelegate setRunOnStartup:YES];
+            self.RunOnStartupButton.state = [appDelegate isRunOnStartupActive] ? NSControlStateValueOn : NSControlStateValueOff;
         }
     }];
 }

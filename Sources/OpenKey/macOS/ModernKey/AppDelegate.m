@@ -93,8 +93,11 @@ extern bool convertToolDontAlertWhenCompleted;
 
 -(void)askPermission {
     NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText: [NSString stringWithFormat:@"OpenKey cần bạn cấp quyền để có thể hoạt động!"]];
-    [alert setInformativeText:@"Vui lòng chạy lại ứng dụng sau khi cấp quyền."];
+    NSString *permissionName = [[NSProcessInfo processInfo] isOperatingSystemAtLeastVersion:(NSOperatingSystemVersion){27, 0, 0}]
+        ? @"Device Control and Data Access"
+        : @"Accessibility (Trợ năng)";
+    [alert setMessageText:@"OpenKey CE cần bạn cấp quyền để có thể hoạt động!"];
+    [alert setInformativeText:[NSString stringWithFormat:@"Vào System Settings > Privacy & Security > %@, bật \"OpenKey CE\", rồi mở lại ứng dụng.", permissionName]];
 
     [alert addButtonWithTitle:@"Không"];
     [alert addButtonWithTitle:@"Cấp quyền"];
@@ -111,15 +114,33 @@ extern bool convertToolDontAlertWhenCompleted;
     [NSApp terminate:0];
 }
 
+-(void)offerToQuitLegacyOpenKey {
+    NSArray<NSRunningApplication *>* legacyApps = [NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.tuyenmai.openkey"];
+    if (legacyApps.count == 0) {
+        return;
+    }
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"OpenKey bản cũ đang chạy"];
+    [alert setInformativeText:@"Hai bộ gõ chạy cùng lúc sẽ làm sai chữ khi gõ. OpenKey CE có thể thoát bản cũ ngay bây giờ.\n\nĐể bản cũ không tự chạy lại khi đăng nhập, hãy tắt \"Khởi động cùng máy\" trong OpenKey cũ hoặc xoá OpenKey.app khỏi Applications."];
+    [alert addButtonWithTitle:@"Thoát OpenKey cũ"];
+    [alert addButtonWithTitle:@"Để sau"];
+    [alert.window setLevel:NSStatusWindowLevel];
+    if ([alert runModal] == NSAlertFirstButtonReturn) {
+        for (NSRunningApplication *app in legacyApps) {
+            [app terminate];
+        }
+    }
+}
+
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     appDelegate = self;
-    
+
     [self registerSupportedNotification];
-    
+
     //set quick tooltip
     [[NSUserDefaults standardUserDefaults] setObject: [NSNumber numberWithInt: 50]
                                               forKey: @"NSInitialToolTipDelay"];
-    
+
     //check whether this app has been launched before that or not
     //Only check instances owned by current user (for multi-user/Fast User Switching support)
     uid_t currentUID = getuid();
@@ -144,22 +165,24 @@ extern bool convertToolDontAlertWhenCompleted;
         [NSApp terminate:nil];
         return;
     }
-    
+
+    [self offerToQuitLegacyOpenKey];
+
     // check if user granted Accessabilty permission
     if (!MJAccessibilityIsEnabled()) {
         [self askPermission];
         return;
     }
-    
+
     vShowIconOnDock = (int)[[NSUserDefaults standardUserDefaults] integerForKey:@"vShowIconOnDock"];
     if (vShowIconOnDock)
         [NSApp setActivationPolicy: NSApplicationActivationPolicyRegular];
-    
+
     if (vSwitchKeyStatus & 0x8000)
         NSBeep();
 
     [self createStatusBarMenu];
-    
+
     //init
     dispatch_async(dispatch_get_main_queue(), ^{
         if (![OpenKeyManager initEventTap]) {
@@ -320,8 +343,40 @@ extern bool convertToolDontAlertWhenCompleted;
 }
 
 -(void)setRunOnStartup:(BOOL)val {
-    CFStringRef appId = (__bridge CFStringRef)@"com.tuyenmai.OpenKeyHelper";
-    SMLoginItemSetEnabled(appId, val);
+    [self setRunOnStartup:val interactive:NO];
+}
+
+-(void)setRunOnStartup:(BOOL)val interactive:(BOOL)interactive {
+    SMAppService *service = [SMAppService mainAppService];
+    NSError *error = nil;
+    if (val && service.status != SMAppServiceStatusEnabled && (interactive || service.status != SMAppServiceStatusRequiresApproval)) {
+        if (![service registerAndReturnError:&error]) {
+            NSLog(@"[OpenKey] SMAppService register failed: %@", error);
+        }
+    } else if (!val && service.status != SMAppServiceStatusNotRegistered) {
+        if (![service unregisterAndReturnError:&error]) {
+            NSLog(@"[OpenKey] SMAppService unregister failed: %@", error);
+        }
+    }
+    if (interactive && val && service.status != SMAppServiceStatusEnabled) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        if (service.status == SMAppServiceStatusRequiresApproval) {
+            [alert setMessageText:@"macOS cần bạn cho phép OpenKey CE khởi động cùng máy"];
+            [alert setInformativeText:@"Vào System Settings > General > Login Items và bật \"OpenKey CE\"."];
+        } else {
+            [alert setMessageText:@"Không bật được khởi động cùng máy"];
+            [alert setInformativeText:[NSString stringWithFormat:@"Hãy đặt OpenKey CE trong thư mục Applications rồi thử lại.%@", error ? [NSString stringWithFormat:@"\n\n%@", error.localizedDescription] : @""]];
+        }
+        [alert addButtonWithTitle:@"Mở Login Items"];
+        [alert addButtonWithTitle:@"Để sau"];
+        if ([alert runModal] == NSAlertFirstButtonReturn) {
+            [SMAppService openSystemSettingsLoginItems];
+        }
+    }
+}
+
+-(BOOL)isRunOnStartupActive {
+    return [SMAppService mainAppService].status == SMAppServiceStatusEnabled;
 }
 
 -(void)setGrayIcon:(BOOL)val {
@@ -495,12 +550,24 @@ extern bool convertToolDontAlertWhenCompleted;
     if (_mainWC == nil) {
         _mainWC = [[NSStoryboard storyboardWithName:@"Main" bundle:nil] instantiateControllerWithIdentifier:@"OpenKey"];
     }
-    //[OpenKeyManager showDockIcon:YES];
     if ([_mainWC.window isVisible]) {
+        [NSApp activateIgnoringOtherApps:YES];
         return;
     }
+    [NSApp activateIgnoringOtherApps:YES];
     [_mainWC.window makeKeyAndOrderFront:nil];
     [_mainWC.window setLevel:NSFloatingWindowLevel];
+
+    // Center on the primary screen — saved frames from prior multi-display
+    // setups can land the window off-screen.
+    [_mainWC.window setFrameAutosaveName:@""];
+    NSScreen *primary = [NSScreen screens].firstObject ?: [NSScreen mainScreen];
+    NSRect visible = primary.visibleFrame;
+    NSRect frame = _mainWC.window.frame;
+    NSPoint origin = NSMakePoint(
+        visible.origin.x + (visible.size.width - frame.size.width) / 2,
+        visible.origin.y + (visible.size.height - frame.size.height) / 2);
+    [_mainWC.window setFrameOrigin:origin];
 }
 
 -(void) onMacroSelected {
@@ -508,9 +575,11 @@ extern bool convertToolDontAlertWhenCompleted;
         _macroWC = [[NSStoryboard storyboardWithName:@"Main" bundle:nil] instantiateControllerWithIdentifier:@"MacroWindow"];
     }
     //[OpenKeyManager showDockIcon:YES];
-    if ([_macroWC.window isVisible])
+    if ([_macroWC.window isVisible]) {
+        [NSApp activateIgnoringOtherApps:YES];
         return;
-    
+    }
+    [NSApp activateIgnoringOtherApps:YES];
     [_macroWC.window makeKeyAndOrderFront:nil];
     [_macroWC.window setLevel:NSFloatingWindowLevel];
 }
@@ -520,9 +589,11 @@ extern bool convertToolDontAlertWhenCompleted;
         _aboutWC = [[NSStoryboard storyboardWithName:@"Main" bundle:nil] instantiateControllerWithIdentifier:@"AboutWindow"];
     }
     //[OpenKeyManager showDockIcon:YES];
-    if ([_aboutWC.window isVisible])
+    if ([_aboutWC.window isVisible]) {
+        [NSApp activateIgnoringOtherApps:YES];
         return;
-
+    }
+    [NSApp activateIgnoringOtherApps:YES];
     [_aboutWC.window makeKeyAndOrderFront:nil];
     [_aboutWC.window setLevel:NSFloatingWindowLevel];
 }

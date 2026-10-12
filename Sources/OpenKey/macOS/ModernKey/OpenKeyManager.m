@@ -71,10 +71,20 @@ static CFRunLoopSourceRef runLoopSource;
     // Add to the current run loop.
     CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, kCFRunLoopCommonModes);
     
-    // Enable the event tap.
+    // Enable the event tap. The source is on the main run loop, which
+    // NSApplication is already running — calling CFRunLoopRun() here would
+    // start a nested loop that blocks AppKit from processing UI events.
     CGEventTapEnable(eventTap, true);
-    
+
     return YES;
+}
+
+// Called from OpenKeyCallback when macOS reports that it turned our tap off.
+// Only this file owns `eventTap`, so re-enabling has to happen here.
+void OpenKeyReEnableEventTap(void) {
+    if (eventTap) {
+        CGEventTapEnable(eventTap, true);
+    }
 }
 
 +(BOOL)stopEventTap {
@@ -149,44 +159,48 @@ static CFRunLoopSourceRef runLoopSource;
 +(void)checkNewVersion:(NSWindow*)parent callbackFunc:(CheckNewVersionCallback) callback {
     //load new version config
     NSURLSession *aSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
-    [[aSession dataTaskWithURL:[NSURL URLWithString:@"https://raw.githubusercontent.com/tuyenvm/OpenKey/master/version.json"] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        if (((NSHTTPURLResponse *)response).statusCode == 200) {
-            if (data) {
-                if(NSClassFromString(@"NSJSONSerialization")) {
-                    NSError *error = nil;
-                    id object = [NSJSONSerialization
-                                 JSONObjectWithData:data
-                                 options:0
-                                 error:&error];
-                    
-                    if(error) {  }
-                    if([object isKindOfClass:[NSDictionary class]]) {
-                        NSDictionary *results = object;
-                        NSDictionary *ver = [results valueForKey:@"latestVersion"];
-                        NSString* versionCodeString = [ver valueForKey:@"versionCode"];
-                        int versionCode = (int)[versionCodeString integerValue];
-                        int currentVersionCode = (int)[((NSString*)[[NSBundle mainBundle] objectForInfoDictionaryKey: @"CFBundleVersion"]) integerValue];
-                        
-                        dispatch_async(dispatch_get_main_queue(), ^{
-                            if (callback != nil) {
-                                callback();
-                            }
-                            if (versionCode > currentVersionCode || callback != nil) {
-                                [self showUpdateMessage:parent needUpdating:versionCode > currentVersionCode newVersion:[ver valueForKey:@"versionName"]];
-                            }
-                        });
-                    }
-                    else {
-                        //oh my god
-                    }
-                }
-                else {
-                    //can not parse json
+    [[aSession dataTaskWithURL:[NSURL URLWithString:@"https://raw.githubusercontent.com/llawliet11/OpenKey/master/version.json"] completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSDictionary *ver = nil;
+        if (((NSHTTPURLResponse *)response).statusCode == 200 && data) {
+            id object = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if ([object isKindOfClass:[NSDictionary class]]) {
+                id entry = [object valueForKey:@"latestMacCEVersion"];
+                if ([entry isKindOfClass:[NSDictionary class]]) {
+                    ver = entry;
                 }
             }
         }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (callback != nil) {
+                callback();
+            }
+            if (ver == nil) {
+                if (callback != nil) {
+                    [self showUpdateCheckFailed:parent];
+                }
+                return;
+            }
+            int versionCode = (int)[[ver valueForKey:@"versionCode"] integerValue];
+            int currentVersionCode = (int)[((NSString*)[[NSBundle mainBundle] objectForInfoDictionaryKey: @"CFBundleVersion"]) integerValue];
+            if (versionCode > currentVersionCode || callback != nil) {
+                [self showUpdateMessage:parent needUpdating:versionCode > currentVersionCode newVersion:[ver valueForKey:@"versionName"]];
+            }
+        });
     }] resume];
 }
+
++(void)showUpdateCheckFailed:(NSWindow*)parent {
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"Không kiểm tra được phiên bản mới"];
+    [alert setInformativeText:@"Vui lòng kiểm tra kết nối mạng, hoặc xem trang Releases trên GitHub."];
+    [alert addButtonWithTitle:@"OK"];
+    if (parent == nil) {
+        [alert runModal];
+    } else {
+        [alert beginSheetModalForWindow:parent completionHandler:nil];
+    }
+}
+
 
 +(void)showUpdateMessage:(NSWindow*)parent needUpdating:(BOOL)needUpdating newVersion:(NSString*)versionString {
     NSAlert *alert = [[NSAlert alloc] init];
@@ -216,25 +230,7 @@ static CFRunLoopSourceRef runLoopSource;
 }
 
 +(void)launchUpdateHelper {
-    //check update app has exist or not
-    NSError *copyError = nil;
-    NSString* target = [NSString stringWithFormat:@"%@/OpenKeyUpdate.app", [self getApplicationSupportFolder]];
-    [[NSFileManager defaultManager] removeItemAtPath:target error:&copyError];
-    if (![[NSFileManager defaultManager] fileExistsAtPath:target]) {
-        [[NSFileManager defaultManager] createDirectoryAtPath:[self getApplicationSupportFolder] withIntermediateDirectories:YES attributes:nil error:nil];
-        
-        if (![[NSFileManager defaultManager] copyItemAtPath:[self getUpdateBundlePath] toPath:target error:&copyError]) {
-            NSLog(@"Error on copy");
-        }
-    }
-    
-    NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
-    NSURL *url = [NSURL fileURLWithPath:[workspace fullPathForApplication:target]];
-    NSError *error = nil;
-    NSArray *arguments = [NSArray arrayWithObjects: @"yeah", nil];
-    [workspace launchApplicationAtURL:url options:0 configuration:[NSDictionary dictionaryWithObject:arguments forKey:NSWorkspaceLaunchConfigurationArguments] error:&error];
-    
-    [NSApp terminate:0]; //exit main app
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/llawliet11/OpenKey/releases/latest"]];
 }
 
 +(NSString*)getApplicationSupportFolder {
@@ -243,8 +239,4 @@ static CFRunLoopSourceRef runLoopSource;
     return [NSString stringWithFormat:@"%@/OpenKey", applicationSupportDirectory];
 }
 
-+(NSString*)getUpdateBundlePath {
-    NSString *currentpath = [[NSBundle mainBundle] bundlePath];
-    return [NSString stringWithFormat:@"%@/Contents/Library/LoginItems/OpenKeyUpdate.app", currentpath];
-}
 @end
