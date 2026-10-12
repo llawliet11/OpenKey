@@ -26,6 +26,8 @@ ZIP="$OUT/OpenKey-CE-$VERSION.zip"
 DMG="$OUT/OpenKey-CE-$VERSION.dmg"
 ditto -c -k --keepParent "$APP" "$ZIP"
 STAGE="$OUT/dmg"; mkdir -p "$STAGE"; cp -R "$APP" "$STAGE/"; ln -s /Applications "$STAGE/Applications"
+cp ../../../LICENSE "$STAGE/LICENSE.txt"
+printf "OpenKey CE %s\n\nCommunity build of OpenKey by Mai Vu Tuyen, GPL-3.0.\nSource for this build: https://github.com/llawliet11/OpenKey/tree/v%s-ce\nOriginal project: https://github.com/tuyenvm/OpenKey\n" "$VERSION" "$VERSION" > "$STAGE/README.txt"
 hdiutil create -volname "$APP_NAME $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 codesign --force --timestamp --sign "$IDENTITY" "$DMG"
 xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait

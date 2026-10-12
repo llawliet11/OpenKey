@@ -13,8 +13,12 @@ All credit for OpenKey goes to its author, Mai Vũ Tuyên. OpenKey CE stays GPL-
 - Creates a fresh backspace event per keystroke instead of reusing one, which fixes stuck typing in Apple Mail and WebKit apps (from #333).
 - Launch at login uses `SMAppService`; the old helper app is gone.
 - Requires macOS 13 Ventura or later; universal binary for Apple silicon and Intel.
-- Bundle ID `com.nghia-pham.openkey-ce`, so it installs next to the original OpenKey. On first launch it imports settings and macros from OpenKey 2.0.5. Quit the original OpenKey before using CE: two input apps at once conflict.
+- Bundle ID `com.nghia-pham.openkey-ce`, so it installs next to the original OpenKey. On first launch it imports settings and macros from OpenKey 2.0.5. Quit the original OpenKey before using CE: two input apps at once conflict. CE detects a running OpenKey 2.0.5 and offers to quit it.
 - Update checks read this fork's `version.json` and open the Releases page; the closed-source in-app updater is removed.
+
+## Permission
+
+OpenKey CE needs the permission that lets it read and send keystrokes: System Settings > Privacy & Security > Accessibility on macOS 13 to 26, renamed Device Control and Data Access on macOS 27. Turn on "OpenKey CE", then open the app again.
 
 ## Build from source
 

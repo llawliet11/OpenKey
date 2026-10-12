@@ -93,8 +93,11 @@ extern bool convertToolDontAlertWhenCompleted;
 
 -(void)askPermission {
     NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText: [NSString stringWithFormat:@"OpenKey cần bạn cấp quyền để có thể hoạt động!"]];
-    [alert setInformativeText:@"Vui lòng chạy lại ứng dụng sau khi cấp quyền."];
+    NSString *permissionName = [[NSProcessInfo processInfo] isOperatingSystemAtLeastVersion:(NSOperatingSystemVersion){27, 0, 0}]
+        ? @"Device Control and Data Access"
+        : @"Accessibility (Trợ năng)";
+    [alert setMessageText:@"OpenKey CE cần bạn cấp quyền để có thể hoạt động!"];
+    [alert setInformativeText:[NSString stringWithFormat:@"Vào System Settings > Privacy & Security > %@, bật \"OpenKey CE\", rồi mở lại ứng dụng.", permissionName]];
 
     [alert addButtonWithTitle:@"Không"];
     [alert addButtonWithTitle:@"Cấp quyền"];
@@ -340,17 +343,40 @@ extern bool convertToolDontAlertWhenCompleted;
 }
 
 -(void)setRunOnStartup:(BOOL)val {
+    [self setRunOnStartup:val interactive:NO];
+}
+
+-(void)setRunOnStartup:(BOOL)val interactive:(BOOL)interactive {
     SMAppService *service = [SMAppService mainAppService];
     NSError *error = nil;
-    if (val && service.status != SMAppServiceStatusEnabled) {
+    if (val && service.status != SMAppServiceStatusEnabled && (interactive || service.status != SMAppServiceStatusRequiresApproval)) {
         if (![service registerAndReturnError:&error]) {
             NSLog(@"[OpenKey] SMAppService register failed: %@", error);
         }
-    } else if (!val && service.status == SMAppServiceStatusEnabled) {
+    } else if (!val && service.status != SMAppServiceStatusNotRegistered) {
         if (![service unregisterAndReturnError:&error]) {
             NSLog(@"[OpenKey] SMAppService unregister failed: %@", error);
         }
     }
+    if (interactive && val && service.status != SMAppServiceStatusEnabled) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        if (service.status == SMAppServiceStatusRequiresApproval) {
+            [alert setMessageText:@"macOS cần bạn cho phép OpenKey CE khởi động cùng máy"];
+            [alert setInformativeText:@"Vào System Settings > General > Login Items và bật \"OpenKey CE\"."];
+        } else {
+            [alert setMessageText:@"Không bật được khởi động cùng máy"];
+            [alert setInformativeText:[NSString stringWithFormat:@"Hãy đặt OpenKey CE trong thư mục Applications rồi thử lại.%@", error ? [NSString stringWithFormat:@"\n\n%@", error.localizedDescription] : @""]];
+        }
+        [alert addButtonWithTitle:@"Mở Login Items"];
+        [alert addButtonWithTitle:@"Để sau"];
+        if ([alert runModal] == NSAlertFirstButtonReturn) {
+            [SMAppService openSystemSettingsLoginItems];
+        }
+    }
+}
+
+-(BOOL)isRunOnStartupActive {
+    return [SMAppService mainAppService].status == SMAppServiceStatusEnabled;
 }
 
 -(void)setGrayIcon:(BOOL)val {
