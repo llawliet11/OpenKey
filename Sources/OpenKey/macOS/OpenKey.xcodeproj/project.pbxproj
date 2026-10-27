@@ -586,8 +586,8 @@
 				OTHER_LDFLAGS = (
 					"-lc++\n-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.nghia-pham.openkey-ce";
-				PRODUCT_NAME = "OpenKey CE";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.nghia-pham.openkey-ce.dev";
+				PRODUCT_NAME = "OpenKey CE Dev";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
 			name = Debug;

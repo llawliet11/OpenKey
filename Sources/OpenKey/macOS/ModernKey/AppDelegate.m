@@ -97,7 +97,8 @@ extern bool convertToolDontAlertWhenCompleted;
         ? @"Device Control and Data Access"
         : @"Accessibility (Trợ năng)";
     [alert setMessageText:@"OpenKey CE cần bạn cấp quyền để có thể hoạt động!"];
-    [alert setInformativeText:[NSString stringWithFormat:@"Vào System Settings > Privacy & Security > %@, bật \"OpenKey CE\", rồi mở lại ứng dụng.", permissionName]];
+    NSString *appName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"];
+    [alert setInformativeText:[NSString stringWithFormat:@"Vào System Settings > Privacy & Security > %@, bật \"%@\", rồi mở lại ứng dụng.", permissionName, appName]];
 
     [alert addButtonWithTitle:@"Không"];
     [alert addButtonWithTitle:@"Cấp quyền"];
@@ -362,7 +363,7 @@ extern bool convertToolDontAlertWhenCompleted;
         NSAlert *alert = [[NSAlert alloc] init];
         if (service.status == SMAppServiceStatusRequiresApproval) {
             [alert setMessageText:@"macOS cần bạn cho phép OpenKey CE khởi động cùng máy"];
-            [alert setInformativeText:@"Vào System Settings > General > Login Items và bật \"OpenKey CE\"."];
+            [alert setInformativeText:[NSString stringWithFormat:@"Vào System Settings > General > Login Items và bật \"%@\".", [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"]]];
         } else {
             [alert setMessageText:@"Không bật được khởi động cùng máy"];
             [alert setInformativeText:[NSString stringWithFormat:@"Hãy đặt OpenKey CE trong thư mục Applications rồi thử lại.%@", error ? [NSString stringWithFormat:@"\n\n%@", error.localizedDescription] : @""]];

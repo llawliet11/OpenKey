@@ -23,8 +23,8 @@ description: Never creates, deletes or scales a remote or billable resource on i
 
 | Artefact | Created at | Deleter, when | Keep-N | Quota / price | Plan basis |
 |---|---|---|---|---|---|
-| GitHub Actions artifact `OpenKey` (Windows build output) | `.github/workflows/msbuild.yml`, step `Upload a Build Artifact`, on every push and PR to `master` | missing: no `retention-days`, so GitHub's repository default applies (open D-label from the policy setup run) | Owner: decide | Owner: decide (Actions storage is quota-counted on private repos) | Owner: decide |
-| GitHub Actions minutes (`windows-latest` build, `ubuntu-latest` attest) | same workflow, same triggers | not an artefact to delete; volume follows the CI trigger D-label | n/a | Owner: decide | Owner: decide |
+| GitHub Actions artifact `OpenKey` (Windows build output) | `.github/workflows/msbuild.yml`, step `Upload a Build Artifact`, only on a manual `workflow_dispatch` run | GitHub deletes it after `retention-days: 1` (owner decision D2, 2026-10-27: keep as little as possible) | 0 after one day | Owner: decide (Actions storage is quota-counted on private repos) | Owner: decide |
+| GitHub Actions minutes (`windows-latest` build, `ubuntu-latest` attest) | same workflow, manual runs only | not an artefact to delete | n/a | Owner: decide | Owner: decide |
 
 No database, bucket, deploy, tunnel, token, queue or schedule is created by the repo's code (survey of `Sources/`, `.github/`, `release.sh`).
 

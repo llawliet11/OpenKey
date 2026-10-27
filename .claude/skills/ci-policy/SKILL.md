@@ -8,7 +8,7 @@ description: Never adds always-on CI, pipelines, background sweeps or release ch
 ## Policy
 
 - No CI runs continuously in the normal dev flow. Promotion-grade verification (full build, release build, signing checks) runs only when promoting to `master`, preparing a release, or on explicit request, as an on-demand command, never after each change or commit.
-- Open conflict: `.github/workflows/msbuild.yml` runs on every push and pull request to `master` (see `## Existing CI`). It stays as is until the owner settles the D-label raised by the policy setup run; until then, a push to `master` triggers it.
+- `.github/workflows/msbuild.yml` runs only by hand (`workflow_dispatch`), per the owner's decision of 2026-10-27 (D1-A: the Windows build is not needed). It is never triggered by a session unless the owner asks in that turn.
 - Interactive session: before a check, name the exact command, what it touches (Xcode build cache, network for notarization) and roughly how long it takes, and wait for the owner's yes.
 - Unattended run (`/goal`, a standing grant, `cyberine autopilot`, `cyberine run`, and every agent they spawn): per task, run the narrowest check below that covers the change, without asking. The promotion check runs once on the integrated state before the run ends only when the starting message names it, and only in the driving session or its review step; otherwise it is offered as plain text in the end-of-run report. Release steps (signing with notarization submit, tag, GitHub Release, `version.json` bump on `master`) are never run unattended unless the owner lifted that gate for the session; this repo has no owner-written tracked rule that pre-authorizes them.
 - `.claude/rules/user-vibe-coding.md` (owner-installed, gitignored) pre-authorizes commit, push and merge in this repo; it does not cover releases or deploys, and it says a push that auto-deploys is stated as a deploy first.
@@ -32,7 +32,7 @@ Release steps, each needing the owner's word in that turn:
 
 List it with `ls .github/workflows`.
 
-- `.github/workflows/msbuild.yml` (MSBuild): triggers on `push` and `pull_request` to `master`. Builds the Windows solution under `Sources/OpenKey/win32/OpenKey` (x86 and x64) on `windows-latest`, uploads the artifact `OpenKey` with no `retention-days`, then an `attest` job writes build provenance (`actions/attest-build-provenance`). It does not build the macOS app that OpenKey CE ships. Conflicts with the policy (runs on every push or PR): open D-label from the policy setup run.
+- `.github/workflows/msbuild.yml` (MSBuild): triggers on `workflow_dispatch` only. Builds the Windows solution under `Sources/OpenKey/win32/OpenKey` (x86 and x64) on `windows-latest`, uploads the artifact `OpenKey` with `retention-days: 1`, then an `attest` job writes build provenance (`actions/attest-build-provenance`). It does not build the macOS app that OpenKey CE ships. No conflict with the policy.
 - No hooks run checks on change: no `.husky`, `lefthook`, `pre-commit` config, and no `package.json`.
 
 ## Cleanup

@@ -10,7 +10,7 @@ description: Never quits, relaunches, focuses, resizes or reinstalls the owner's
 - OpenKey CE is the owner's Vietnamese input method: while it runs, every keystroke the owner types passes through it. The installed, running instance is a shared, in-use resource, not a test binary. Quitting, relaunching, stealing focus from, resizing or moving its windows, reinstalling it, and writing to its defaults domain all touch it.
 - One relaunch per install, announced in the reply before it happens, is free when the task asks for an install. Anything more (a measurement loop, a debug cycle, a bisect) needs the owner's yes in that turn with a stated count and time window ("6 relaunches, until 15:10"); in an unattended run it is never done on the owner's instance.
 - Disruption budget: at most 2 owner-instance relaunches per turn, unless the owner raises it in that turn. At the cap, stop that line of work and report.
-- Repeated launches run on a copy with its own bundle id, app name, install path and defaults domain. No such copy exists yet (see `## Separate copy`): until it does, repeated launches wait for the owner's yes.
+- Repeated launches run on a copy with its own bundle id, app name, install path and defaults domain. The copy is the Debug build `OpenKey CE Dev` (see `## Separate copy`).
 - An owner-ordered install on the owner's instance follows one path: the owner's word in this turn; a backup of `/Applications/OpenKey CE.app` and of its defaults (`defaults export com.nghia-pham.openkey-ce .local/live-app/<date>-defaults.plist`); an identity check of the new build (`CFBundleIdentifier`, `CFBundleShortVersionString`, `CFBundleVersion` via `/usr/libexec/PlistBuddy`); a quit by PID; the relaunch; a check that the running PID is the new binary; and the rollback command (restore the backed-up `.app`) stated before starting.
 - cyberine-devguard's `live_guard` backs this up: broad `pkill`/`killall` are denied, narrower kills by name or port ask, and relaunches past its limit are denied. Work with recorded PIDs.
 - Runs that take the owner's mouse, keyboard or screen (computer use, UI automation, typing tests, screen recording) need the owner away and a go-ahead in that turn.
@@ -33,9 +33,15 @@ description: Never quits, relaunches, focuses, resizes or reinstalls the owner's
 
 ## Separate copy
 
-None exists: Debug and Release share the owner's bundle id, name and defaults domain, so a Debug build launched while the owner's instance runs quits itself, and one launched while it does not run reads and writes the owner's settings and may register a login item for the build path. Open D-label from the policy setup run proposes `com.nghia-pham.openkey-ce.dev` named `OpenKey CE Dev`. Until the owner settles it, repeated launches wait for the owner's yes.
+The Debug configuration builds `OpenKey CE Dev` with bundle id `com.nghia-pham.openkey-ce.dev` (owner decision D3-A, 2026-10-27; `PRODUCT_BUNDLE_IDENTIFIER` and `PRODUCT_NAME` of the Debug config in `Sources/OpenKey/macOS/OpenKey.xcodeproj/project.pbxproj`). It has its own defaults domain `com.nghia-pham.openkey-ce.dev`, its own single-instance check and its own Accessibility grant. Release builds keep the owner's identity.
 
-When the copy exists it follows these rules: its visible name carries the `Dev` suffix; it registers no login item; it gets its own Accessibility grant, an owner step; its new bundle id is announced to repos whose allow or deny lists key on bundle ids (computer-use and automation tools); and when its identity changes, the build script deletes the old-identity build output after checking its bundle id.
+- Build: the Debug build in `ci-policy` `## Promotion check`. Output: `~/Library/Developer/Xcode/DerivedData/OpenKey-*/Build/Products/Debug/OpenKey CE Dev.app`, run from there, never copied into `/Applications`.
+- Launch: `open -n "<that path>"`, recording the PID; quit by that PID.
+- Granting the Dev copy Accessibility (Device Control and Data Access) is an owner step; without it the Dev copy shows the permission alert and quits.
+- Both apps convert keystrokes when both run with the permission granted, which garbles the owner's typing. A typing test on the Dev copy therefore needs the owner away and their yes in that turn; launch-only checks (start-up, menu bar, settings window) do not.
+- On first launch the Dev copy imports the original OpenKey's settings (`com.tuyenmai.openkey`), read-only; it never reads the owner's `com.nghia-pham.openkey-ce` domain.
+
+The copy follows these rules: its visible name carries the `Dev` suffix; it registers no login item; it gets its own Accessibility grant, an owner step; its new bundle id is announced to repos whose allow or deny lists key on bundle ids (computer-use and automation tools); and when its identity changes, the build script deletes the old-identity build output after checking its bundle id.
 
 ## Targets
 
